@@ -43,47 +43,122 @@ SEARCH_TERMS = [
 
 # ─────────────────────────────────────────────
 # IT TITLE FILTER
-# A job title must contain at least one of these
-# keywords to be included in the results.
-# This prevents false matches from LinkedIn and
-# other boards that match on partial words.
+# Two-stage filter:
+# 1. Title must contain at least one IT keyword
+# 2. Title must NOT contain any exclusion word
+# This blocks false matches like "diesel technician"
+# and "patient care tech" from slipping through.
 # ─────────────────────────────────────────────
 IT_KEYWORDS = [
-    "it ",
-    " it",
-    "tech",
+    "it support",
+    "it technician",
+    "it specialist",
+    "it analyst",
+    "it help",
+    "it coordinator",
+    "it administrator",
+    "it manager",
     "helpdesk",
     "help desk",
     "help-desk",
-    "desktop",
+    "desktop support",
+    "desktop technician",
     "service desk",
-    "network",
-    "systems",
-    "sysadmin",
-    "sys admin",
-    "computer",
-    "infrastructure",
     "deskside",
-    "end user",
-    "end-user",
+    "end user support",
+    "end-user support",
     "support specialist",
     "support analyst",
     "support engineer",
     "support technician",
     "field technician",
     "field tech",
-    "hardware",
-    "software support",
-    "pc tech",
+    "pc technician",
     "pc support",
+    "pc tech",
+    "computer support",
+    "computer technician",
+    "network support",
+    "network technician",
+    "network administrator",
+    "systems administrator",
+    "systems analyst",
+    "sysadmin",
+    "sys admin",
+    "infrastructure",
     "information technology",
     "information systems",
+    "software support",
+    "hardware support",
+    "hardware technician",
+    "technical support",
 ]
 
+# Jobs containing ANY of these words are excluded
+# even if they matched an IT keyword above
+IT_EXCLUSIONS = [
+    "diesel",
+    "automotive",
+    "auto body",
+    "auto tech",
+    "mechanic",
+    "patient care",
+    "patient tech",
+    "dental",
+    "medical",
+    "clinical",
+    "culinary",
+    "food",
+    "hvac",
+    "plumbing",
+    "electrical",
+    "construction",
+    "nursing",
+    "pharmacy",
+    "radiology",
+    "surgical",
+    "veterinary",
+    "childcare",
+    "custodial",
+    "janitorial",
+    "welding",
+    "forklift",
+    "warehouse",
+    "housing",
+    "case manager",
+]
+
+# Target states — jobs outside these are rejected
+TARGET_STATES = {"GA", "NC", "CO"}
+
+# Full state names that may appear in location strings
+TARGET_STATE_NAMES = {
+    "georgia", "north carolina", "colorado"
+}
+
 def is_it_job(title: str) -> bool:
-    """Return True if the job title contains at least one IT-related keyword."""
+    """Return True if title matches IT keywords and has no exclusion words."""
     title_lower = title.lower()
-    return any(keyword in title_lower for keyword in IT_KEYWORDS)
+    if not any(keyword in title_lower for keyword in IT_KEYWORDS):
+        return False
+    if any(excl in title_lower for excl in IT_EXCLUSIONS):
+        return False
+    return True
+
+def is_target_location(location: str) -> bool:
+    """Return True if the job location is in one of our target states."""
+    loc_lower = location.lower()
+    # Check for state abbreviations (e.g. ", GA" or "GA,")
+    for state in TARGET_STATES:
+        if f", {state.lower()}" in loc_lower or f" {state.lower()}" in loc_lower:
+            return True
+    # Check for full state names
+    if any(name in loc_lower for name in TARGET_STATE_NAMES):
+        return True
+    # USAJobs sometimes returns just the state abbreviation
+    if location.strip().upper() in TARGET_STATES:
+        return True
+    return False
 
 
 # ─────────────────────────────────────────────
@@ -172,6 +247,9 @@ def add_job(all_jobs: dict, seen_ids: set, title: str, company: str,
     company = company.strip()
     # Skip jobs that don't match IT-related keywords
     if not is_it_job(title):
+        return
+    # Skip jobs outside our target states
+    if not is_target_location(location):
         return
     jid     = job_id(title, company, location)
     if jid in seen_ids or jid in all_jobs:
@@ -492,6 +570,10 @@ def build_html_email(jobs: list[dict]) -> str:
   </div>
   <div class="body">{body_content}</div>
   <div class="footer">
+    <p style="margin-bottom:10px; font-size:13px; color:#718096; background:#fffbeb; border:1px solid #f6e05e; border-radius:6px; padding:10px 16px; text-align:left;">
+      <strong style="color:#b7791f;">&#9432; Reminder:</strong> Degree requirements are not shown in this summary.
+      Please click each job link to review the full description and verify education requirements before applying.
+    </p>
     <p>Sources: Indeed · LinkedIn · USAJobs · ZipRecruiter · CareerBuilder</p>
     <p style="margin-top:6px;">
       <span class="region-tag">NE Georgia</span>
