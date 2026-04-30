@@ -243,6 +243,9 @@ LOCATIONS = [
     ("Avon",             "CO"),
     ("Eagle",            "CO"),
     ("Gypsum",           "CO"),
+    ("Lakewood",         "CO"),
+    ("Arvada",           "CO"),
+    ("Central City",     "CO"),
 ]
 
 # ─────────────────────────────────────────────
