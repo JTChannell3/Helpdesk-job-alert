@@ -219,6 +219,7 @@ LOCATIONS = [
     ("Marietta",         "GA"),
     ("Rome",             "GA"),
     ("Dalton",           "GA"),
+    ("Cartersville",     "GA"),
     # North Carolina corridor
     ("Murphy",           "NC"),
     ("Andrews",          "NC"),
@@ -254,6 +255,20 @@ LOCATIONS = [
     ("Lakewood",         "CO"),
     ("Arvada",           "CO"),
     ("Central City",     "CO"),
+    ("Georgetown",       "CO"),
+    ("Silver Plume",     "CO"),
+    ("Empire",           "CO"),
+    ("Wheat Ridge",      "CO"),
+    ("Edgewater",        "CO"),
+    ("Lakeside",         "CO"),
+    ("Rollinsville",     "CO"),
+    ("Genesee",          "CO"),
+    ("Kittredge",        "CO"),
+    ("Dumont",           "CO"),
+    ("Lawson",           "CO"),
+    ("Littleton",        "CO"),
+    ("Englewood",        "CO"),
+    ("Highlands Ranch",  "CO"),
 ]
 
 # ─────────────────────────────────────────────
