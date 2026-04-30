@@ -1,5 +1,5 @@
 """
-IT/Helpdesk Job Alert Bot — Multi-Source Edition
+IT/Helpdesk/Security Job Alert Bot — Multi-Source Edition
 Sources: Indeed, LinkedIn, USAJobs, ZipRecruiter, CareerBuilder
 Sends daily HTML email digest via Gmail SMTP
 """
@@ -63,15 +63,10 @@ SEARCH_TERMS = [
 ]
 
 # ─────────────────────────────────────────────
-# IT TITLE FILTER
-# Two-stage filter:
-# 1. Title must contain at least one IT keyword
-# 2. Title must NOT contain any exclusion word
-# This blocks false matches like "diesel technician"
-# and "patient care tech" from slipping through.
+# TITLE FILTER — IT and Security keywords
 # ─────────────────────────────────────────────
-IT_KEYWORDS = [
-    # IT / Helpdesk keywords
+JOB_KEYWORDS = [
+    # IT / Helpdesk
     "it support",
     "it technician",
     "it specialist",
@@ -114,22 +109,29 @@ IT_KEYWORDS = [
     "hardware support",
     "hardware technician",
     "technical support",
-    # Security keywords
+    # Security
     "security guard",
     "security officer",
     "security professional",
     "security specialist",
     "security patrol",
+    "security concierge",
+    "security dispatcher",
+    "security alarm monitor",
     "site security",
     "unarmed security",
     "armed security",
     "loss prevention",
+    "loss prevention agent",
     "patrol officer",
+    "surveillance officer",
+    "command center operator",
+    "control room operator",
+    "asset protection",
 ]
 
 # Jobs containing ANY of these words are excluded
-# even if they matched an IT keyword above
-IT_EXCLUSIONS = [
+JOB_EXCLUSIONS = [
     "diesel",
     "automotive",
     "auto body",
@@ -161,38 +163,14 @@ IT_EXCLUSIONS = [
     "case manager",
 ]
 
-# Target states — jobs outside these are rejected
-TARGET_STATES = {"GA", "NC", "CO"}
+# ─────────────────────────────────────────────
+# TARGET STATES
+# ─────────────────────────────────────────────
+TARGET_STATES = {"GA", "NC", "CO", "TN", "AL"}
 
-# Full state names that may appear in location strings
 TARGET_STATE_NAMES = {
-    "georgia", "north carolina", "colorado"
+    "georgia", "north carolina", "colorado", "tennessee", "alabama"
 }
-
-def is_it_job(title: str) -> bool:
-    """Return True if title matches IT keywords and has no exclusion words."""
-    title_lower = title.lower()
-    if not any(keyword in title_lower for keyword in IT_KEYWORDS):
-        return False
-    if any(excl in title_lower for excl in IT_EXCLUSIONS):
-        return False
-    return True
-
-def is_target_location(location: str) -> bool:
-    """Return True if the job location is in one of our target states."""
-    loc_lower = location.lower()
-    # Check for state abbreviations (e.g. ", GA" or "GA,")
-    for state in TARGET_STATES:
-        if f", {state.lower()}" in loc_lower or f" {state.lower()}" in loc_lower:
-            return True
-    # Check for full state names
-    if any(name in loc_lower for name in TARGET_STATE_NAMES):
-        return True
-    # USAJobs sometimes returns just the state abbreviation
-    if location.strip().upper() in TARGET_STATES:
-        return True
-    return False
-
 
 # ─────────────────────────────────────────────
 # TARGET LOCATIONS
@@ -220,11 +198,6 @@ LOCATIONS = [
     ("Rome",             "GA"),
     ("Dalton",           "GA"),
     ("Cartersville",     "GA"),
-    # Tennessee corridor
-    ("Cleveland",        "TN"),
-    ("Chattanooga",      "TN"),
-    # Alabama corridor
-    ("Huntsville",       "AL"),
     # North Carolina corridor
     ("Murphy",           "NC"),
     ("Andrews",          "NC"),
@@ -274,7 +247,36 @@ LOCATIONS = [
     ("Littleton",        "CO"),
     ("Englewood",        "CO"),
     ("Highlands Ranch",  "CO"),
+    # Tennessee corridor
+    ("Cleveland",        "TN"),
+    ("Chattanooga",      "TN"),
+    # Alabama corridor
+    ("Huntsville",       "AL"),
 ]
+
+# ─────────────────────────────────────────────
+# FILTER FUNCTIONS
+# ─────────────────────────────────────────────
+def is_good_job(title: str) -> bool:
+    """Return True if title matches job keywords and has no exclusion words."""
+    title_lower = title.lower()
+    if not any(keyword in title_lower for keyword in JOB_KEYWORDS):
+        return False
+    if any(excl in title_lower for excl in JOB_EXCLUSIONS):
+        return False
+    return True
+
+def is_target_location(location: str) -> bool:
+    """Return True if the job location is in one of our target states."""
+    loc_lower = location.lower()
+    for state in TARGET_STATES:
+        if f", {state.lower()}" in loc_lower or f" {state.lower()}" in loc_lower:
+            return True
+    if any(name in loc_lower for name in TARGET_STATE_NAMES):
+        return True
+    if location.strip().upper() in TARGET_STATES:
+        return True
+    return False
 
 # ─────────────────────────────────────────────
 # DEDUPLICATION HELPERS
@@ -285,29 +287,24 @@ def load_seen_jobs() -> set:
             return set(json.load(f))
     return set()
 
-
 def save_seen_jobs(seen: set):
     seen_list = list(seen)[-5000:]
     with open(SEEN_JOBS_FILE, "w") as f:
         json.dump(seen_list, f)
 
-
 def job_id(title: str, company: str, location: str) -> str:
     raw = f"{title.lower().strip()}|{company.lower().strip()}|{location.lower().strip()}"
     return hashlib.md5(raw.encode()).hexdigest()
-
 
 def add_job(all_jobs: dict, seen_ids: set, title: str, company: str,
             location: str, link: str, posted: str, source: str):
     title   = title.strip()
     company = company.strip()
-    # Skip jobs that don't match IT-related keywords
-    if not is_it_job(title):
+    if not is_good_job(title):
         return
-    # Skip jobs outside our target states
     if not is_target_location(location):
         return
-    jid     = job_id(title, company, location)
+    jid = job_id(title, company, location)
     if jid in seen_ids or jid in all_jobs:
         return
     all_jobs[jid] = {
@@ -319,7 +316,6 @@ def add_job(all_jobs: dict, seen_ids: set, title: str, company: str,
         "source":   source,
         "jid":      jid,
     }
-
 
 # ─────────────────────────────────────────────
 # SOURCE 1 — INDEED  (RSS)
@@ -354,7 +350,6 @@ def fetch_indeed(all_jobs: dict, seen_ids: set):
             except Exception as e:
                 print(f"    Warning - Indeed {term}/{city}: {e}")
     print(f"    Done: {count} raw entries scanned")
-
 
 # ─────────────────────────────────────────────
 # SOURCE 2 — LINKEDIN  (public jobs feed)
@@ -397,7 +392,6 @@ def fetch_linkedin(all_jobs: dict, seen_ids: set):
                 print(f"    Warning - LinkedIn {term}/{city}: {e}")
     print(f"    Done: {count} raw entries scanned")
 
-
 # ─────────────────────────────────────────────
 # SOURCE 3 — USAJOBS  (official free API)
 # ─────────────────────────────────────────────
@@ -438,7 +432,6 @@ def fetch_usajobs(all_jobs: dict, seen_ids: set):
                 print(f"    Warning - USAJobs {term}/{state}: {e}")
     print(f"    Done: {count} raw entries scanned")
 
-
 # ─────────────────────────────────────────────
 # SOURCE 4 — ZIPRECRUITER  (RSS)
 # ─────────────────────────────────────────────
@@ -466,7 +459,6 @@ def fetch_ziprecruiter(all_jobs: dict, seen_ids: set):
             except Exception as e:
                 print(f"    Warning - ZipRecruiter {term}/{city}: {e}")
     print(f"    Done: {count} raw entries scanned")
-
 
 # ─────────────────────────────────────────────
 # SOURCE 5 — CAREERBUILDER  (RSS)
@@ -499,7 +491,6 @@ def fetch_careerbuilder(all_jobs: dict, seen_ids: set):
                 print(f"    Warning - CareerBuilder {term}/{city}: {e}")
     print(f"    Done: {count} raw entries scanned")
 
-
 # ─────────────────────────────────────────────
 # MAIN FETCHER
 # ─────────────────────────────────────────────
@@ -521,7 +512,6 @@ def fetch_jobs() -> list[dict]:
     print(f"Found {len(new_jobs)} new unique jobs across all sources.")
     return new_jobs
 
-
 # ─────────────────────────────────────────────
 # EMAIL BUILDER
 # ─────────────────────────────────────────────
@@ -539,8 +529,8 @@ def build_html_email(jobs: list[dict]) -> str:
     if not jobs:
         body_content = """
         <div class="no-jobs">
-            <p>No new IT/Helpdesk job postings found today in your target region.</p>
-            <p>Check back tomorrow — the bot is still watching!</p>
+            <p>No new job postings found today in your target region.</p>
+            <p>Check back tomorrow - the bot is still watching!</p>
         </div>
         """
     else:
@@ -569,7 +559,7 @@ def build_html_email(jobs: list[dict]) -> str:
 
         body_content = f"""
         <p class="summary">Found <strong>{len(jobs)} new listing{'s' if len(jobs) != 1 else ''}</strong>
-        across NE Georgia, Western North Carolina, and Colorado.</p>
+        across NE Georgia, Western North Carolina, Colorado, Tennessee, and Alabama.</p>
         <p class="source-summary">{summary_badges}</p>
         <table>
             <thead>
@@ -621,20 +611,22 @@ def build_html_email(jobs: list[dict]) -> str:
 <div class="wrapper">
   <div class="header">
     <h1>IT, Helpdesk and Security Job Alert</h1>
-    <p>Daily digest — NE Georgia · Western North Carolina · Colorado</p>
+    <p>Daily digest - NE Georgia · Western NC · Colorado · Tennessee · Alabama</p>
     <span class="badge">Date: {now}</span>
   </div>
   <div class="body">{body_content}</div>
   <div class="footer">
     <p style="margin-bottom:10px; font-size:13px; color:#718096; background:#fffbeb; border:1px solid #f6e05e; border-radius:6px; padding:10px 16px; text-align:left;">
-      <strong style="color:#b7791f;">&#9432; Reminder:</strong> Degree requirements are not shown in this summary.
+      <strong style="color:#b7791f;">Reminder:</strong> Degree requirements are not shown in this summary.
       Please click each job link to review the full description and verify education requirements before applying.
     </p>
     <p>Sources: Indeed · LinkedIn · USAJobs · ZipRecruiter · CareerBuilder</p>
     <p style="margin-top:6px;">
       <span class="region-tag">NE Georgia</span>
       <span class="region-tag">Western NC</span>
-      <span class="region-tag">Colorado Mountains</span>
+      <span class="region-tag">Colorado</span>
+      <span class="region-tag">Tennessee</span>
+      <span class="region-tag">Alabama</span>
     </p>
     <p style="margin-top:10px;">Automated daily at 7:00 AM ET</p>
   </div>
@@ -642,15 +634,14 @@ def build_html_email(jobs: list[dict]) -> str:
 </body>
 </html>"""
 
-
 # ─────────────────────────────────────────────
 # EMAIL SENDER  (Gmail SMTP)
 # ─────────────────────────────────────────────
 def send_email(jobs: list[dict]):
     now_str = datetime.now(ZoneInfo("America/New_York")).strftime("%B %d, %Y")
-    subject = f"IT Job Alert - {len(jobs)} New Listing{'s' if len(jobs) != 1 else ''} - {now_str}"
+    subject = f"IT/Security Job Alert - {len(jobs)} New Listing{'s' if len(jobs) != 1 else ''} - {now_str}"
     if not jobs:
-        subject = f"IT Job Alert - No New Listings Today - {now_str}"
+        subject = f"IT/Security Job Alert - No New Listings Today - {now_str}"
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
@@ -668,13 +659,12 @@ def send_email(jobs: list[dict]):
         server.sendmail(SENDER_EMAIL, RECIPIENT_EMAIL, msg.as_string())
     print("Email sent successfully!")
 
-
 # ─────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
     print("=" * 55)
-    print("  IT / Helpdesk Job Alert Bot - Multi-Source")
+    print("  IT / Helpdesk / Security Job Alert Bot")
     print(f"  {datetime.now(ZoneInfo('America/New_York')).strftime('%Y-%m-%d %H:%M:%S ET')}")
     print("=" * 55)
     jobs = fetch_jobs()
