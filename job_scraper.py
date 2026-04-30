@@ -42,6 +42,51 @@ SEARCH_TERMS = [
 ]
 
 # ─────────────────────────────────────────────
+# IT TITLE FILTER
+# A job title must contain at least one of these
+# keywords to be included in the results.
+# This prevents false matches from LinkedIn and
+# other boards that match on partial words.
+# ─────────────────────────────────────────────
+IT_KEYWORDS = [
+    "it ",
+    " it",
+    "tech",
+    "helpdesk",
+    "help desk",
+    "help-desk",
+    "desktop",
+    "service desk",
+    "network",
+    "systems",
+    "sysadmin",
+    "sys admin",
+    "computer",
+    "infrastructure",
+    "deskside",
+    "end user",
+    "end-user",
+    "support specialist",
+    "support analyst",
+    "support engineer",
+    "support technician",
+    "field technician",
+    "field tech",
+    "hardware",
+    "software support",
+    "pc tech",
+    "pc support",
+    "information technology",
+    "information systems",
+]
+
+def is_it_job(title: str) -> bool:
+    """Return True if the job title contains at least one IT-related keyword."""
+    title_lower = title.lower()
+    return any(keyword in title_lower for keyword in IT_KEYWORDS)
+
+
+# ─────────────────────────────────────────────
 # TARGET LOCATIONS
 # ─────────────────────────────────────────────
 LOCATIONS = [
@@ -125,6 +170,9 @@ def add_job(all_jobs: dict, seen_ids: set, title: str, company: str,
             location: str, link: str, posted: str, source: str):
     title   = title.strip()
     company = company.strip()
+    # Skip jobs that don't match IT-related keywords
+    if not is_it_job(title):
+        return
     jid     = job_id(title, company, location)
     if jid in seen_ids or jid in all_jobs:
         return
