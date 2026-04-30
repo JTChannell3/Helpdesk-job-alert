@@ -60,6 +60,12 @@ LOCATIONS = [
     ("Jasper",        "GA"),
     ("Canton",        "GA"),
     ("Ball Ground",   "GA"),
+    ("Athens",        "GA"),
+    ("Alpharetta",    "GA"),
+    ("Kennesaw",      "GA"),
+    ("Marietta",      "GA"),
+    ("Rome",          "GA"),
+    ("Dalton",        "GA"),
     # North Carolina corridor
     ("Murphy",        "NC"),
     ("Andrews",       "NC"),
@@ -70,6 +76,10 @@ LOCATIONS = [
     ("Sylva",         "NC"),
     ("Franklin",      "NC"),
     ("Highlands",     "NC"),
+    ("Asheville",     "NC"),
+    ("Waynesville",   "NC"),
+    ("Brevard",       "NC"),
+    ("Hendersonville","NC"),
 ]
 
 # ─────────────────────────────────────────────
