@@ -29,6 +29,7 @@ SEEN_JOBS_FILE  = "seen_jobs.json"
 # SEARCH TERMS
 # ─────────────────────────────────────────────
 SEARCH_TERMS = [
+    # IT / Helpdesk
     "help desk technician",
     "IT support specialist",
     "desktop support technician",
@@ -39,6 +40,18 @@ SEARCH_TERMS = [
     "computer support technician",
     "systems support technician",
     "network support technician",
+    # Security
+    "security guard",
+    "security officer",
+    "unarmed security",
+    "armed security officer",
+    "unarmed security officer",
+    "security professional",
+    "loss prevention officer",
+    "security specialist",
+    "site security officer",
+    "patrol officer",
+    "security patrol",
 ]
 
 # ─────────────────────────────────────────────
@@ -50,6 +63,7 @@ SEARCH_TERMS = [
 # and "patient care tech" from slipping through.
 # ─────────────────────────────────────────────
 IT_KEYWORDS = [
+    # IT / Helpdesk keywords
     "it support",
     "it technician",
     "it specialist",
@@ -92,6 +106,17 @@ IT_KEYWORDS = [
     "hardware support",
     "hardware technician",
     "technical support",
+    # Security keywords
+    "security guard",
+    "security officer",
+    "security professional",
+    "security specialist",
+    "security patrol",
+    "site security",
+    "unarmed security",
+    "armed security",
+    "loss prevention",
+    "patrol officer",
 ]
 
 # Jobs containing ANY of these words are excluded
@@ -218,8 +243,6 @@ LOCATIONS = [
     ("Avon",             "CO"),
     ("Eagle",            "CO"),
     ("Gypsum",           "CO"),
-    ("Lakewood",         "CO"),
-    ("Arvada",           "CO"),
 ]
 
 # ─────────────────────────────────────────────
@@ -566,7 +589,7 @@ def build_html_email(jobs: list[dict]) -> str:
 <body>
 <div class="wrapper">
   <div class="header">
-    <h1>IT and Helpdesk Job Alert</h1>
+    <h1>IT, Helpdesk and Security Job Alert</h1>
     <p>Daily digest — NE Georgia · Western North Carolina · Colorado</p>
     <span class="badge">Date: {now}</span>
   </div>
