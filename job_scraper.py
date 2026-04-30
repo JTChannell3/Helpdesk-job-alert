@@ -80,6 +80,24 @@ LOCATIONS = [
     ("Waynesville",   "NC"),
     ("Brevard",       "NC"),
     ("Hendersonville","NC"),
+    # Colorado corridor
+    ("Nederland",        "CO"),
+    ("Glenwood Springs", "CO"),
+    ("Golden",           "CO"),
+    ("Boulder",          "CO"),
+    ("Blackhawk",        "CO"),
+    ("Idaho Springs",    "CO"),
+    ("Vail",             "CO"),
+    ("Evergreen",        "CO"),
+    ("Conifer",          "CO"),
+    ("Morrison",         "CO"),
+    ("Dillon",           "CO"),
+    ("Frisco",           "CO"),
+    ("Silverthorne",     "CO"),
+    ("Breckenridge",     "CO"),
+    ("Avon",             "CO"),
+    ("Eagle",            "CO"),
+    ("Gypsum",           "CO"),
 ]
 
 # ─────────────────────────────────────────────
