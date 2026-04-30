@@ -220,6 +220,11 @@ LOCATIONS = [
     ("Rome",             "GA"),
     ("Dalton",           "GA"),
     ("Cartersville",     "GA"),
+    # Tennessee corridor
+    ("Cleveland",        "TN"),
+    ("Chattanooga",      "TN"),
+    # Alabama corridor
+    ("Huntsville",       "AL"),
     # North Carolina corridor
     ("Murphy",           "NC"),
     ("Andrews",          "NC"),
