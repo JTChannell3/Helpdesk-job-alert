@@ -52,6 +52,14 @@ SEARCH_TERMS = [
     "site security officer",
     "patrol officer",
     "security patrol",
+    "security concierge",
+    "security dispatcher",
+    "security alarm monitor",
+    "surveillance officer",
+    "command center operator",
+    "control room operator",
+    "loss prevention agent",
+    "asset protection",
 ]
 
 # ─────────────────────────────────────────────
