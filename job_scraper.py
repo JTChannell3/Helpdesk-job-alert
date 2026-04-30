@@ -336,7 +336,7 @@ def build_html_email(jobs: list[dict]) -> str:
 
 
 # ─────────────────────────────────────────────
-# EMAIL SENDER  (Outlook SMTP)
+# EMAIL SENDER  (Gmail SMTP)
 # ─────────────────────────────────────────────
 def send_email(jobs: list[dict]):
     now_str = datetime.now(ZoneInfo("America/New_York")).strftime("%B %d, %Y")
@@ -353,7 +353,7 @@ def send_email(jobs: list[dict]):
     msg.attach(html_part)
 
     print(f"📧 Sending email to {RECIPIENT_EMAIL} …")
-    with smtplib.SMTP("smtp-mail.outlook.com", 587) as server:
+    with smtplib.SMTP("smtp.gmail.com", 587) as server:
         server.ehlo()
         server.starttls()
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
