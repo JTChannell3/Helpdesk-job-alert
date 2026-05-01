@@ -1,8 +1,11 @@
 name: IT Job Alert — Daily Run
 
 on:
+  # Runs every day at 7:00 AM Eastern Time (11:00 UTC)
   schedule:
     - cron: "0 11 * * *"
+
+  # Also allows you to trigger it manually from the GitHub Actions tab
   workflow_dispatch:
 
 jobs:
@@ -10,17 +13,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ── 1. Check out your repo ──────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ── 2. Set up Python ────────────────────────────────────────────
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+      # ── 3. Install dependencies ─────────────────────────────────────
       - name: Install dependencies
         run: pip install feedparser
 
+      # ── 4. Restore seen-jobs cache (so we don't re-send old jobs) ───
       - name: Restore seen jobs cache
         uses: actions/cache@v4
         with:
@@ -28,13 +35,16 @@ jobs:
           key: seen-jobs-${{ runner.os }}
           restore-keys: seen-jobs-
 
+      # ── 5. Run the scraper ──────────────────────────────────────────
       - name: Run job scraper
         env:
           SENDER_EMAIL:    ${{ secrets.SENDER_EMAIL }}
           SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
           RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+          USAJOBS_API_KEY: ${{ secrets.USAJOBS_API_KEY }}
         run: python job_scraper.py
 
+      # ── 6. Save updated seen-jobs cache ─────────────────────────────
       - name: Save seen jobs cache
         uses: actions/cache@v4
         with:
