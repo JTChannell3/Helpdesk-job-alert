@@ -19,11 +19,12 @@ from zoneinfo import ZoneInfo
 # ─────────────────────────────────────────────
 # CONFIGURATION
 # ─────────────────────────────────────────────
-SENDER_EMAIL    = os.environ.get("SENDER_EMAIL", "your_email@gmail.com")
-SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD", "your_app_password")
-RECIPIENT_EMAIL = os.environ.get("RECIPIENT_EMAIL", "your_email@outlook.com")
+SENDER_EMAIL      = os.environ.get("SENDER_EMAIL", "your_email@gmail.com")
+SENDER_PASSWORD   = os.environ.get("SENDER_PASSWORD", "your_app_password")
+RECIPIENT_EMAIL   = os.environ.get("RECIPIENT_EMAIL", "your_email@outlook.com")
+USAJOBS_API_KEY   = os.environ.get("USAJOBS_API_KEY", "")
 
-SEEN_JOBS_FILE  = "seen_jobs.json"
+SEEN_JOBS_FILE    = "seen_jobs.json"
 
 # ─────────────────────────────────────────────
 # SEARCH TERMS
@@ -358,6 +359,7 @@ def fetch_linkedin(all_jobs: dict, seen_ids: set):
     print("  Scanning LinkedIn...")
     count = 0
     import re
+    import time
     for term in SEARCH_TERMS:
         for city, state in LOCATIONS:
             params = {
@@ -388,15 +390,20 @@ def fetch_linkedin(all_jobs: dict, seen_ids: set):
                     add_job(all_jobs, seen_ids, title, company, location,
                             link.split("?")[0], "", "LinkedIn")
                     count += 1
+                # Small delay to avoid hitting LinkedIn rate limits
+                time.sleep(1)
             except Exception as e:
                 print(f"    Warning - LinkedIn {term}/{city}: {e}")
     print(f"    Done: {count} raw entries scanned")
 
 # ─────────────────────────────────────────────
-# SOURCE 3 — USAJOBS  (official free API)
+# SOURCE 3 — USAJOBS  (official API with key)
 # ─────────────────────────────────────────────
 def fetch_usajobs(all_jobs: dict, seen_ids: set):
     print("  Scanning USAJobs...")
+    if not USAJOBS_API_KEY:
+        print("    Skipped - no API key configured")
+        return
     count = 0
     states = list(set(state for _, state in LOCATIONS))
     for term in SEARCH_TERMS:
@@ -411,8 +418,9 @@ def fetch_usajobs(all_jobs: dict, seen_ids: set):
             url = "https://data.usajobs.gov/api/search?" + urllib.parse.urlencode(params)
             try:
                 req = urllib.request.Request(url, headers={
-                    "Host":       "data.usajobs.gov",
-                    "User-Agent": "JobAlertBot/1.0",
+                    "Host":               "data.usajobs.gov",
+                    "User-Agent":         RECIPIENT_EMAIL,
+                    "Authorization-Key":  USAJOBS_API_KEY,
                 })
                 with urllib.request.urlopen(req, timeout=10) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
@@ -433,7 +441,41 @@ def fetch_usajobs(all_jobs: dict, seen_ids: set):
     print(f"    Done: {count} raw entries scanned")
 
 # ─────────────────────────────────────────────
-# SOURCE 4 — ZIPRECRUITER  (RSS)
+# SOURCE 4 — GLASSDOOR  (RSS feed)
+# ─────────────────────────────────────────────
+def fetch_glassdoor(all_jobs: dict, seen_ids: set):
+    print("  Scanning Glassdoor...")
+    count = 0
+    for term in SEARCH_TERMS:
+        for city, state in LOCATIONS:
+            params = {
+                "searchKeyword": term,
+                "searchLocation": f"{city}, {state}",
+            }
+            url = "https://www.glassdoor.com/Job/jobs.htm?" + urllib.parse.urlencode(params)
+            try:
+                req = urllib.request.Request(url, headers={
+                    "User-Agent": "Mozilla/5.0 (compatible; JobAlertBot/1.0)"
+                })
+                import re
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    html = resp.read().decode("utf-8", errors="ignore")
+                # Parse job listings from Glassdoor HTML
+                cards = re.findall(
+                    r'data-job-title="([^"]+)"[^>]*data-employer-name="([^"]+)"[^>]*data-job-location="([^"]+)"[^>]*data-job-emp-id="([^"]+)"',
+                    html
+                )
+                for title, company, location, job_id_val in cards:
+                    link = f"https://www.glassdoor.com/job-listing/j?jl={job_id_val}"
+                    add_job(all_jobs, seen_ids, title, company, location,
+                            link, "", "Glassdoor")
+                    count += 1
+            except Exception as e:
+                print(f"    Warning - Glassdoor {term}/{city}: {e}")
+    print(f"    Done: {count} raw entries scanned")
+
+# ─────────────────────────────────────────────
+# SOURCE 5 — ZIPRECRUITER  (RSS)
 # ─────────────────────────────────────────────
 def fetch_ziprecruiter(all_jobs: dict, seen_ids: set):
     print("  Scanning ZipRecruiter...")
@@ -461,37 +503,6 @@ def fetch_ziprecruiter(all_jobs: dict, seen_ids: set):
     print(f"    Done: {count} raw entries scanned")
 
 # ─────────────────────────────────────────────
-# SOURCE 5 — CAREERBUILDER  (RSS)
-# ─────────────────────────────────────────────
-def fetch_careerbuilder(all_jobs: dict, seen_ids: set):
-    print("  Scanning CareerBuilder...")
-    count = 0
-    for term in SEARCH_TERMS:
-        for city, state in LOCATIONS:
-            params = {
-                "keywords": term,
-                "location": f"{city}, {state}",
-                "radius":   "25",
-            }
-            url = "https://www.careerbuilder.com/jobs/rss?" + urllib.parse.urlencode(params)
-            try:
-                feed = feedparser.parse(url)
-                for entry in feed.entries:
-                    title    = entry.get("title", "Unknown Title").strip()
-                    company  = entry.get("author", "Unknown Company")
-                    location = entry.get("cb_city", city)
-                    if entry.get("cb_state"):
-                        location += f", {entry['cb_state']}"
-                    else:
-                        location += f", {state}"
-                    add_job(all_jobs, seen_ids, title, company, location,
-                            entry.get("link", ""), entry.get("published", ""), "CareerBuilder")
-                    count += 1
-            except Exception as e:
-                print(f"    Warning - CareerBuilder {term}/{city}: {e}")
-    print(f"    Done: {count} raw entries scanned")
-
-# ─────────────────────────────────────────────
 # MAIN FETCHER
 # ─────────────────────────────────────────────
 def fetch_jobs() -> list[dict]:
@@ -502,8 +513,8 @@ def fetch_jobs() -> list[dict]:
     fetch_indeed(all_jobs, seen_ids)
     fetch_linkedin(all_jobs, seen_ids)
     fetch_usajobs(all_jobs, seen_ids)
+    fetch_glassdoor(all_jobs, seen_ids)
     fetch_ziprecruiter(all_jobs, seen_ids)
-    fetch_careerbuilder(all_jobs, seen_ids)
 
     new_jobs = list(all_jobs.values())
     seen_ids.update(j["jid"] for j in new_jobs)
