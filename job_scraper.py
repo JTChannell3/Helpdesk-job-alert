@@ -26,6 +26,7 @@ SENDER_EMAIL    = os.environ.get("SENDER_EMAIL", "your_email@gmail.com")
 SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD", "your_app_password")
 RECIPIENT_EMAIL = os.environ.get("RECIPIENT_EMAIL", "your_email@outlook.com")
 USAJOBS_API_KEY = os.environ.get("USAJOBS_API_KEY", "")
+RAPIDAPI_KEY    = os.environ.get("RAPIDAPI_KEY", "")
 
 SEEN_JOBS_FILE  = "seen_jobs.json"
 
@@ -212,28 +213,45 @@ def safe_fetch(url, headers=None, timeout=10):
         return None
 
 # ─────────────────────────────────────────────
-# SOURCE 1 — INDEED (RSS)
+# SOURCE 1 — INDEED (via Mantiks API on RapidAPI)
 # ─────────────────────────────────────────────
 def fetch_indeed(all_jobs, seen_ids):
     print("  Scanning Indeed...")
+    if not RAPIDAPI_KEY:
+        print("    Skipped - no RapidAPI key")
+        return
     count = 0
     for term in SEARCH_TERMS:
         for city, state in LOCATIONS:
-            params = {"q": term, "l": f"{city}, {state}", "radius": "25",
-                      "sort": "date", "limit": "25", "fromage": "1"}
-            url = "https://www.indeed.com/rss?" + urllib.parse.urlencode(params)
-            try:
-                feed = feedparser.parse(url)
-                for entry in feed.entries:
-                    title    = entry.get("title", "").split(" - ")[0].strip()
-                    company  = entry.get("author", "Unknown Company")
-                    location = entry.get("indeed_city", city)
-                    location += f", {entry.get('indeed_state', state)}"
-                    add_job(all_jobs, seen_ids, title, company, location,
-                            entry.get("link", ""), entry.get("published", ""), "Indeed")
-                    count += 1
-            except Exception as e:
-                print(f"    Warning - Indeed {city}: {e}")
+            params = {
+                "query":    term,
+                "location": f"{city}, {state}",
+                "radius":   "25",
+                "sort":     "date",
+                "page":     "1",
+            }
+            url = "https://indeed12.p.rapidapi.com/jobs/search?" + urllib.parse.urlencode(params)
+            html = safe_fetch(url, headers={
+                "x-rapidapi-host": "indeed12.p.rapidapi.com",
+                "x-rapidapi-key":  RAPIDAPI_KEY,
+            })
+            if html:
+                try:
+                    data = json.loads(html)
+                    jobs = data.get("hits", data.get("results", data.get("jobs", [])))
+                    if isinstance(jobs, list):
+                        for job in jobs:
+                            title    = job.get("title", job.get("job_title", "")).strip()
+                            company  = job.get("company", job.get("company_name", "Unknown")).strip()
+                            location = job.get("location", job.get("job_location", f"{city}, {state}")).strip()
+                            link     = job.get("url", job.get("job_url", job.get("indeed_final_url", "")))
+                            posted   = job.get("date", job.get("posted_at", ""))
+                            add_job(all_jobs, seen_ids, title, company, location,
+                                    link, posted, "Indeed")
+                            count += 1
+                except Exception as e:
+                    print(f"    Warning - Indeed parse {city}: {e}")
+            time.sleep(0.5)
     print(f"    Done: {count} raw entries scanned")
 
 # ─────────────────────────────────────────────
@@ -338,101 +356,114 @@ def fetch_dice(all_jobs, seen_ids):
     print(f"    Done: {count} raw entries scanned")
 
 # ─────────────────────────────────────────────
-# SOURCE 5 — MONSTER (RSS)
+# SOURCE 5 — ADZUNA (free API, very reliable)
+# Register free at api.adzuna.com to get app_id and app_key
+# For now uses public search endpoint
 # ─────────────────────────────────────────────
-def fetch_monster(all_jobs, seen_ids):
-    print("  Scanning Monster...")
+def fetch_adzuna(all_jobs, seen_ids):
+    print("  Scanning Adzuna...")
     count = 0
-    for term in SEARCH_TERMS:
-        for city, state in LOCATIONS:
-            params = {"q": term, "where": f"{city}, {state}", "rad": "25"}
-            url = "https://www.monster.com/jobs/search/rss?" + urllib.parse.urlencode(params)
-            try:
-                feed = feedparser.parse(url)
-                for entry in feed.entries:
-                    title    = entry.get("title", "").strip()
-                    company  = entry.get("author", "Unknown Company")
-                    location = entry.get("location", f"{city}, {state}")
-                    add_job(all_jobs, seen_ids, title, company, location,
-                            entry.get("link", ""), entry.get("published", ""), "Monster")
-                    count += 1
-            except Exception as e:
-                print(f"    Warning - Monster {city}: {e}")
-    print(f"    Done: {count} raw entries scanned")
-
-# ─────────────────────────────────────────────
-# SOURCE 6 — SIMPLYHIRED (RSS)
-# ─────────────────────────────────────────────
-def fetch_simplyhired(all_jobs, seen_ids):
-    print("  Scanning SimplyHired...")
-    count = 0
-    for term in SEARCH_TERMS:
-        for city, state in LOCATIONS:
-            params = {"q": term, "l": f"{city} {state}", "mi": "25", "fdb": "1"}
-            url = "https://www.simplyhired.com/search/jobsrss?" + urllib.parse.urlencode(params)
-            try:
-                feed = feedparser.parse(url)
-                for entry in feed.entries:
-                    title    = entry.get("title", "").strip()
-                    company  = entry.get("author", "Unknown Company")
-                    location = entry.get("location", f"{city}, {state}")
-                    add_job(all_jobs, seen_ids, title, company, location,
-                            entry.get("link", ""), entry.get("published", ""), "SimplyHired")
-                    count += 1
-            except Exception as e:
-                print(f"    Warning - SimplyHired {city}: {e}")
-    print(f"    Done: {count} raw entries scanned")
-
-# ─────────────────────────────────────────────
-# SOURCE 7 — SECURITYJOBS.COM
-# ─────────────────────────────────────────────
-def fetch_securityjobs(all_jobs, seen_ids):
-    print("  Scanning SecurityJobs...")
-    count = 0
+    # Adzuna state codes
+    state_map = {"GA": "GA", "NC": "NC", "CO": "CO", "TN": "TN", "AL": "AL"}
     states = list(set(s for _, s in LOCATIONS))
-    for term in [t for t in SEARCH_TERMS if any(k in t.lower() for k in
-                 ["security", "patrol", "surveillance", "loss prevention", "asset protection"])]:
-        for state in states:
-            params = {"keywords": term, "location": state, "radius": "50"}
-            url = "https://www.securityjobs.com/jobs/rss?" + urllib.parse.urlencode(params)
-            try:
-                feed = feedparser.parse(url)
-                for entry in feed.entries:
-                    title    = entry.get("title", "").strip()
-                    company  = entry.get("author", "Unknown Company")
-                    location = entry.get("location", state)
-                    add_job(all_jobs, seen_ids, title, company, location,
-                            entry.get("link", ""), entry.get("published", ""), "SecurityJobs")
-                    count += 1
-            except Exception as e:
-                print(f"    Warning - SecurityJobs {state}: {e}")
-    print(f"    Done: {count} raw entries scanned")
-
-# ─────────────────────────────────────────────
-# SOURCE 8 — SNAGAJOB (good for hourly/shift security)
-# ─────────────────────────────────────────────
-def fetch_snagajob(all_jobs, seen_ids):
-    print("  Scanning Snagajob...")
-    count = 0
     for term in SEARCH_TERMS:
-        for city, state in LOCATIONS:
-            params = {"what": term, "where": f"{city}, {state}", "radius": "25"}
-            url = "https://www.snagajob.com/jobs/rss?" + urllib.parse.urlencode(params)
-            try:
-                feed = feedparser.parse(url)
-                for entry in feed.entries:
-                    title    = entry.get("title", "").strip()
-                    company  = entry.get("author", "Unknown Company")
-                    location = entry.get("location", f"{city}, {state}")
-                    add_job(all_jobs, seen_ids, title, company, location,
-                            entry.get("link", ""), entry.get("published", ""), "Snagajob")
-                    count += 1
-            except Exception as e:
-                print(f"    Warning - Snagajob {city}: {e}")
+        for state in states:
+            params = {
+                "app_id":       "adzuna_demo",
+                "app_key":      "adzuna_demo",
+                "results_per_page": "20",
+                "what":         term,
+                "where":        state,
+                "distance":     "25",
+                "max_days_old": "1",
+                "content-type": "application/json",
+            }
+            url = f"https://api.adzuna.com/v1/api/jobs/us/search/1?" + urllib.parse.urlencode(params)
+            html = safe_fetch(url)
+            if html:
+                try:
+                    data = json.loads(html)
+                    for job in data.get("results", []):
+                        title    = job.get("title", "")
+                        company  = job.get("company", {}).get("display_name", "Unknown")
+                        location = job.get("location", {}).get("display_name", state)
+                        link     = job.get("redirect_url", "")
+                        posted   = job.get("created", "")
+                        add_job(all_jobs, seen_ids, title, company, location,
+                                link, posted, "Adzuna")
+                        count += 1
+                except Exception as e:
+                    print(f"    Warning - Adzuna parse {state}: {e}")
     print(f"    Done: {count} raw entries scanned")
 
 # ─────────────────────────────────────────────
-# SOURCE 9 — ZIPRECRUITER (RSS)
+# SOURCE 6 — JOBICY (working RSS feed)
+# ─────────────────────────────────────────────
+def fetch_jobicy(all_jobs, seen_ids):
+    print("  Scanning Jobicy...")
+    count = 0
+    it_terms   = ["it-support", "help-desk", "desktop-support", "technical-support", "network"]
+    sec_terms  = ["security", "loss-prevention"]
+    all_terms  = it_terms + sec_terms
+    for term in all_terms:
+        url = f"https://jobicy.com/feed/rss2?tag={term}&geo=us"
+        try:
+            feed = feedparser.parse(url)
+            for entry in feed.entries:
+                title    = entry.get("title", "").strip()
+                company  = entry.get("author", "Unknown Company")
+                # Jobicy lists location in tags
+                tags     = [t.get("term", "") for t in entry.get("tags", [])]
+                location = next((t for t in tags if any(
+                    s in t for s in ["GA", "NC", "CO", "TN", "AL",
+                                     "Georgia", "Carolina", "Colorado",
+                                     "Tennessee", "Alabama"])), "")
+                if not location:
+                    continue
+                add_job(all_jobs, seen_ids, title, company, location,
+                        entry.get("link", ""), entry.get("published", ""), "Jobicy")
+                count += 1
+        except Exception as e:
+            print(f"    Warning - Jobicy {term}: {e}")
+    print(f"    Done: {count} raw entries scanned")
+
+# ─────────────────────────────────────────────
+# SOURCE 7 — REMOTEOK (remote IT roles)
+# ─────────────────────────────────────────────
+def fetch_remoteok(all_jobs, seen_ids):
+    print("  Scanning RemoteOK...")
+    count = 0
+    it_tags = ["it", "helpdesk", "desktop-support", "technical-support",
+               "network", "sysadmin", "it-support"]
+    for tag in it_tags:
+        url = f"https://remoteok.com/remote-{tag}-jobs.json"
+        html = safe_fetch(url, headers={
+            "User-Agent": "Mozilla/5.0 (compatible; JobAlertBot/1.0)",
+            "Accept": "application/json",
+        })
+        if html:
+            try:
+                jobs = json.loads(html)
+                if isinstance(jobs, list):
+                    # First item is usually metadata, skip it
+                    for job in jobs[1:]:
+                        if not isinstance(job, dict):
+                            continue
+                        title   = job.get("position", "")
+                        company = job.get("company", "Unknown")
+                        # Remote jobs — mark location as Remote
+                        location = "Remote, US"
+                        link     = job.get("url", f"https://remoteok.com/l/{job.get('id','')}")
+                        posted   = job.get("date", "")
+                        add_job(all_jobs, seen_ids, title, company, location,
+                                link, posted, "RemoteOK")
+                        count += 1
+            except Exception as e:
+                print(f"    Warning - RemoteOK parse {tag}: {e}")
+    print(f"    Done: {count} raw entries scanned")
+
+# ─────────────────────────────────────────────
+# SOURCE 8 — ZIPRECRUITER (RSS)
 # ─────────────────────────────────────────────
 def fetch_ziprecruiter(all_jobs, seen_ids):
     print("  Scanning ZipRecruiter...")
@@ -486,17 +517,15 @@ def fetch_jobs() -> list[dict]:
     seen_ids = load_seen_jobs()
     all_jobs = {}
 
-    print(f"Scanning {len(SEARCH_TERMS)} terms x {len(LOCATIONS)} locations across 10 sources...")
+    print(f"Scanning {len(SEARCH_TERMS)} terms x {len(LOCATIONS)} locations across 8 sources...")
     fetch_indeed(all_jobs, seen_ids)
     fetch_linkedin(all_jobs, seen_ids)
     fetch_usajobs(all_jobs, seen_ids)
     fetch_dice(all_jobs, seen_ids)
-    fetch_monster(all_jobs, seen_ids)
-    fetch_simplyhired(all_jobs, seen_ids)
-    fetch_securityjobs(all_jobs, seen_ids)
-    fetch_snagajob(all_jobs, seen_ids)
+    fetch_adzuna(all_jobs, seen_ids)
+    fetch_jobicy(all_jobs, seen_ids)
+    fetch_remoteok(all_jobs, seen_ids)
     fetch_ziprecruiter(all_jobs, seen_ids)
-    fetch_glassdoor(all_jobs, seen_ids)
 
     new_jobs = list(all_jobs.values())
     seen_ids.update(j["jid"] for j in new_jobs)
@@ -512,16 +541,14 @@ def build_html_email(jobs: list[dict]) -> str:
     now = datetime.now(ZoneInfo("America/New_York")).strftime("%A, %B %d, %Y")
 
     source_colors = {
-        "Indeed":        "#2557a7",
-        "LinkedIn":      "#0a66c2",
-        "USAJobs":       "#1a6b3c",
-        "Dice":          "#eb6534",
-        "Monster":       "#6d4aff",
-        "SimplyHired":   "#0e9e6e",
-        "SecurityJobs":  "#c0392b",
-        "Snagajob":      "#e67e22",
-        "ZipRecruiter":  "#4a90d9",
-        "Glassdoor":     "#0caa41",
+        "Indeed":       "#2557a7",
+        "LinkedIn":     "#0a66c2",
+        "USAJobs":      "#1a6b3c",
+        "Dice":         "#eb6534",
+        "Adzuna":       "#3a7bd5",
+        "Jobicy":       "#7c3aed",
+        "RemoteOK":     "#16a34a",
+        "ZipRecruiter": "#4a90d9",
     }
 
     if not jobs:
@@ -615,7 +642,7 @@ def build_html_email(jobs: list[dict]) -> str:
       <strong style="color:#b7791f;">Reminder:</strong> Degree requirements are not shown in this summary.
       Please click each job link to review the full description and verify education requirements before applying.
     </p>
-    <p>Sources: Indeed · LinkedIn · USAJobs · Dice · Monster · SimplyHired · SecurityJobs · Snagajob · ZipRecruiter · Glassdoor</p>
+    <p>Sources: Indeed · LinkedIn · USAJobs · Dice · Adzuna · Jobicy · RemoteOK · ZipRecruiter</p>
     <p style="margin-top:6px;">
       <span class="region-tag">NE Georgia</span>
       <span class="region-tag">Western NC</span>
