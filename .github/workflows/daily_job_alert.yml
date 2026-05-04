@@ -42,6 +42,7 @@ jobs:
           SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
           RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
           USAJOBS_API_KEY: ${{ secrets.USAJOBS_API_KEY }}
+          RAPIDAPI_KEY:    ${{ secrets.RAPIDAPI_KEY }}
         run: python job_scraper.py
 
       # ── 6. Save updated seen-jobs cache ─────────────────────────────
